@@ -1,0 +1,25 @@
+{
+  "_说明": "给 run_task.py 用的识别规则。复制本文件为 task_profiles.json 后按需修改，用 --profile <名字> 指定。",
+  "_不配也能跑": "没有这个文件、或没指定 --profile 时，run_task.py 只用一条通用规则：把脚本输出里的 [1/3] 这类标记当作当前步骤。",
+  "_字段含义": {
+    "step_marks": "按顺序匹配，命中第一条就用它的 name 作为步骤名；pattern 是正则",
+    "rows_patterns": "从输出里抓处理行数，取第一个捕获组的整数",
+    "write_patterns": "命中即认为写入了外部系统（会记成 外部写入=true）",
+    "no_write_marks": "命中即认为没写外部系统，优先级高于 write_patterns"
+  },
+  "profiles": {
+    "example": {
+      "step_marks": [
+        { "pattern": "\\[1/3\\]", "name": "query_source" },
+        { "pattern": "\\[2/3\\]", "name": "read_target" },
+        { "pattern": "\\[3/3\\]", "name": "write_target" }
+      ],
+      "rows_patterns": [
+        "更新\\s+(\\d+)\\s+行",
+        "查到\\s+(\\d+)\\s+条"
+      ],
+      "write_patterns": ["已写入\\s+\\d+\\s+行"],
+      "no_write_marks": ["不写入", "[dry-run]"]
+    }
+  }
+}

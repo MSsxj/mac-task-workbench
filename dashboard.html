@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mac 智能工作台</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --line:#e3e7ec; --line2:#eef1f4;
+    --tx:#1c2024; --tx2:#5a6470; --tx3:#8b949e;
+    --ok:#1a7f37; --okbg:#e8f5ec;
+    --warn:#9a6700; --warnbg:#fff6e0;
+    --bad:#cf222e; --badbg:#fdeced;
+    --info:#0969da; --infobg:#e8f1fd;
+    --gray:#6e7781; --graybg:#f0f2f4;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--tx);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--info);text-decoration:none}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+       background:var(--graybg);padding:1px 5px;border-radius:4px;color:var(--tx2)}
+  .wrap{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
+
+  /* ── 顶栏 ── */
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .title{font-size:19px;font-weight:650;letter-spacing:.2px}
+  .title small{font-weight:400;color:var(--tx3);font-size:12px;margin-left:8px}
+  .spacer{flex:1}
+  .meta{font-size:12px;color:var(--tx3)}
+  button{font-family:inherit;font-size:13px;cursor:pointer;border-radius:7px;
+         border:1px solid var(--line);background:#fff;color:var(--tx);padding:6px 12px;
+         transition:background .12s,border-color .12s}
+  button:hover{background:#f7f8fa;border-color:#cfd6dd}
+  button:disabled{opacity:.55;cursor:progress}
+  button.primary{background:#1f2328;color:#fff;border-color:#1f2328}
+  button.primary:hover{background:#33383d}
+  select,input[type=text]{font-family:inherit;font-size:13px;color:var(--tx);
+    background:#fff;border:1px solid var(--line);border-radius:7px;padding:6px 9px;outline:none}
+  select:focus,input:focus{border-color:#9cb4d4;box-shadow:0 0 0 3px rgba(9,105,218,.08)}
+
+  /* ── 卡片通用 ── */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+         box-shadow:var(--shadow)}
+  .panel-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line2)}
+  .panel-h h2{font-size:14px;font-weight:600;margin:0}
+  .panel-b{padding:14px 16px}
+
+  /* ── 系统状态 ── */
+  .sysgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .syscard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+           padding:13px 15px;box-shadow:var(--shadow)}
+  .syscard .lab{font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:6px}
+  .syscard .val{font-size:26px;font-weight:600;letter-spacing:-.3px;margin:4px 0 2px;
+                font-variant-numeric:tabular-nums}
+  .syscard .val .u{font-size:13px;font-weight:500;color:var(--tx3);margin-left:2px}
+  .syscard .sub{font-size:12px;color:var(--tx3);min-height:18px}
+  .bar{height:6px;background:#eef1f4;border-radius:99px;overflow:hidden;margin:8px 0 0}
+  .bar > i{display:block;height:100%;border-radius:99px;background:var(--ok);
+           transition:width .35s ease,background .2s}
+  .syscard.na .val{color:var(--tx3);font-size:18px;font-weight:500}
+  .syscard.na .bar{display:none}
+  .srcnote{font-size:11px;color:var(--tx3);margin-top:8px;line-height:1.5}
+
+  /* ── 统计条 ── */
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+        box-shadow:var(--shadow);cursor:pointer;transition:border-color .12s,transform .08s}
+  .stat:hover{border-color:#cfd6dd}
+  .stat:active{transform:translateY(1px)}
+  .stat .n{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
+  .stat .k{font-size:12px;color:var(--tx2)}
+  .stat.warn .n{color:var(--warn)}
+  .stat.bad .n{color:var(--bad)}
+  .stat.ok .n{color:var(--ok)}
+
+  /* ── 提示条 ── */
+  .notice{display:flex;gap:9px;align-items:flex-start;padding:10px 13px;border-radius:8px;
+          font-size:13px;margin-bottom:10px;border:1px solid transparent}
+  .notice.bad{background:var(--badbg);border-color:#f6c9cc;color:#7d1218}
+  .notice.warn{background:var(--warnbg);border-color:#f0dfae;color:#6b4a00}
+  .notice.info{background:var(--infobg);border-color:#cddffb;color:#0b4a94}
+  .notice .x{margin-left:auto;cursor:pointer;opacity:.5;padding:0 3px}
+  .notice .x:hover{opacity:1}
+
+  /* ── 任务表 ── */
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 16px;
+           border-bottom:1px solid var(--line2)}
+  .tabs{display:flex;gap:2px;background:var(--graybg);padding:2px;border-radius:8px}
+  .tabs button{border:none;background:transparent;padding:5px 13px;border-radius:6px;
+               font-size:13px;color:var(--tx2)}
+  .tabs button.on{background:#fff;color:var(--tx);box-shadow:0 1px 2px rgba(16,24,40,.08);font-weight:600}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:3px 11px;
+        font-size:12px;color:var(--tx2);cursor:pointer}
+  .chip.on{background:#1f2328;border-color:#1f2328;color:#fff}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line2);
+        vertical-align:middle;font-size:13px}
+  th{font-size:12px;color:var(--tx2);font-weight:500;background:#fbfcfd;
+     position:sticky;top:0;z-index:1}
+  tbody tr:hover{background:#fafbfc}
+  tbody tr{cursor:pointer}
+  .trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nm{font-weight:500}
+  .dim{color:var(--tx3)}
+  .badge{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;
+         line-height:19px;white-space:nowrap;border:1px solid transparent}
+  .b-ok{background:var(--okbg);color:var(--ok);border-color:#c9e8d2}
+  .b-bad{background:var(--badbg);color:var(--bad);border-color:#f6c9cc}
+  .b-warn{background:var(--warnbg);color:var(--warn);border-color:#f0dfae}
+  .b-info{background:var(--infobg);color:var(--info);border-color:#cddffb}
+  .b-gray{background:var(--graybg);color:var(--gray);border-color:#e3e7ec}
+  .b-run{background:#eef4ff;color:#0b4a94;border-color:#cddffb}
+  .sub2{display:block;font-size:11px;color:var(--tx3);margin-top:2px}
+  .empty{padding:34px 16px;text-align:center;color:var(--tx3);font-size:13px}
+  .tblwrap{max-height:none;overflow:visible}
+
+  /* ── 抽屉 ── */
+  .mask{position:fixed;inset:0;background:rgba(16,24,40,.28);opacity:0;pointer-events:none;
+        transition:opacity .18s;z-index:40}
+  .mask.on{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(660px,94vw);background:#fff;
+          border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(16,24,40,.10);
+          transform:translateX(100%);transition:transform .22s ease;z-index:41;
+          display:flex;flex-direction:column}
+  .drawer.on{transform:none}
+  .dr-h{display:flex;align-items:flex-start;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line2)}
+  .dr-h h3{font-size:15px;margin:0;font-weight:600;line-height:1.4;word-break:break-all}
+  .dr-h .close{margin-left:auto;border:none;background:transparent;font-size:20px;
+               line-height:1;color:var(--tx3);padding:2px 6px}
+  .dr-b{overflow:auto;padding:16px 18px 40px}
+  .dr-b h4{font-size:13px;margin:18px 0 8px;color:var(--tx2);font-weight:600}
+  .dr-b h4:first-child{margin-top:0}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:6px 10px;font-size:13px}
+  .kv .k{color:var(--tx3)}
+  .kv .v{word-break:break-word}
+  .logbox{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;
+          padding:10px 12px;max-height:340px;overflow:auto;white-space:pre-wrap;
+          font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+          line-height:1.6;color:#2b3138}
+  .logbox:empty::before{content:"暂无详细日志";color:var(--tx3)}
+  .srcrow{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line2)}
+  .srcrow:last-child{border-bottom:none}
+  .srcrow .lbl{font-size:13px}
+  .srcrow .why{font-size:11px;color:var(--tx3)}
+  .hint{font-size:11px;color:var(--tx3);line-height:1.6;margin-top:6px}
+  .foot{margin-top:22px;font-size:11px;color:var(--tx3);line-height:1.7;
+        border-top:1px solid var(--line2);padding-top:12px}
+  .foot code{font-size:11px}
+
+  @media (max-width:1080px){
+    .sysgrid{grid-template-columns:repeat(2,1fr)}
+    .stats{grid-template-columns:repeat(3,1fr)}
+  }
+  @media (max-width:680px){
+    .wrap{padding:12px 12px 40px}
+    .sysgrid{grid-template-columns:1fr}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    th:nth-child(4),td:nth-child(4){display:none}
+    .drawer{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="title">Mac 智能工作台 <small id="hostname"></small></div>
+    <div class="spacer"></div>
+    <div class="meta" id="meta">正在读取…</div>
+    <button id="btn-refresh" class="primary" type="button">刷新</button>
+  </header>
+
+  <div id="notices"></div>
+
+  <!-- 一、系统状态 -->
+  <section class="panel" style="margin-bottom:14px">
+    <div class="panel-h">
+      <h2>电脑状态</h2>
+      <span class="dim" style="font-size:12px" id="sys-time">采集时间 —</span>
+      <div class="spacer"></div>
+      <label class="dim" style="font-size:12px">自动刷新
+        <select id="sys-iv" style="margin-left:6px">
+          <option value="15">15 秒</option>
+          <option value="30" selected>30 秒</option>
+          <option value="0">关闭</option>
+        </select>
+      </label>
+    </div>
+    <div class="panel-b">
+      <div class="sysgrid" id="sysgrid">
+        <div class="syscard"><div class="lab">CPU</div><div class="val">—</div><div class="sub">读取中…</div></div>
+        <div class="syscard"><div class="lab">内存</div><div class="val">—</div><div class="sub">读取中…</div></div>
+        <div class="syscard"><div class="lab">磁盘</div><div class="val">—</div><div class="sub">读取中…</div></div>
+        <div class="syscard"><div class="lab">网络</div><div class="val">—</div><div class="sub">读取中…</div></div>
+      </div>
+      <div class="srcnote" id="sys-src"></div>
+    </div>
+  </section>
+
+  <!-- 二、任务统计 -->
+  <section class="panel" style="margin-bottom:14px">
+    <div class="panel-h">
+      <h2>自动任务概览</h2>
+      <span class="dim" style="font-size:12px" id="runs-time"></span>
+    </div>
+    <div class="panel-b">
+      <div class="stats" id="stats"></div>
+    </div>
+  </section>
+
+  <!-- 三、任务列表 -->
+  <section class="panel">
+    <div class="panel-h">
+      <h2>任务列表</h2>
+      <span class="dim" style="font-size:12px" id="list-count"></span>
+    </div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs">
+        <button data-tab="all" class="on" type="button">全部</button>
+        <button data-tab="local" type="button">Mac 本地</button>
+        <button data-tab="wb" type="button">WorkBuddy</button>
+      </div>
+      <input type="text" id="q" placeholder="搜索任务名 / 归属 / 调度…" style="width:230px">
+      <select id="f-vendor"><option value="">全部归属</option></select>
+      <select id="f-state"><option value="">全部状态</option></select>
+      <select id="f-run">
+        <option value="">全部执行结果</option>
+        <option value="failed">最近失败</option>
+        <option value="ok">最近成功</option>
+        <option value="missed">漏跑</option>
+        <option value="none">无运行记录</option>
+      </select>
+      <button id="clear" type="button">清空筛选</button>
+      <div class="spacer"></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty" style="display:none">没有符合条件的任务</div>
+  </section>
+
+  <div class="foot">
+    数据来源：本机 <code>launchd</code> 配置（只读）+ WorkBuddy 本地任务库（只读，仅 id/名称/状态/计划）；
+    运行结果来自 WorkBuddy 平台记录与本项目包装器日志。<br>
+    说明：平台返回 SUCCESS 只代表该次运行按平台流程完成，<b>不等于业务结果已核对</b>；
+    没有运行记录时一律显示「未提供运行记录」，不默认成功。状态分三类：配置状态、进程状态、最近执行结果，互不等同。<br>
+    <span id="foot-detail"></span>
+  </div>
+</div>
+
+<div class="mask" id="mask"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dr-h">
+    <div>
+      <h3 id="dr-title">—</h3>
+      <div class="dim" style="font-size:12px;margin-top:3px" id="dr-sub"></div>
+    </div>
+    <button class="close" id="dr-close" type="button" aria-label="关闭">×</button>
+  </div>
+  <div class="dr-b" id="dr-body"></div>
+</aside>
+
+<script src="data/scan-data.js"></script>
+<script src="data/automations.js"></script>
+<script src="data/runs.js"></script>
+<script src="data/state.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var S = window.__SCAN_DATA__ || null;
+  var A = window.__AUTOMATIONS__ || null;
+  var R = window.__RUNS__ || null;
+  var ST = window.__STATE__ || null;
+  var SYS = null;                 // 系统状态，来自 /api/sys
+
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  };
+  function pad(n){ return (n<10?'0':'')+n; }
+  function fmtBytes(n){
+    if(n==null) return '—';
+    var u=['B','KB','MB','GB','TB'], i=0, v=Number(n);
+    while(v>=1024 && i<u.length-1){ v/=1024; i++; }
+    return (v>=100? v.toFixed(0) : v.toFixed(1)) + ' ' + u[i];
+  }
+  function fmtDT(s){
+    if(!s) return '—';
+    return String(s).replace('T',' ').slice(0,16);
+  }
+  function ageText(s){
+    if(!s) return '';
+    var t = new Date(String(s).replace(' ','T'));
+    if(isNaN(t)) return '';
+    var d = Math.floor((Date.now()-t.getTime())/60000);
+    if(d < 1) return '刚刚';
+    if(d < 60) return d+' 分钟前';
+    if(d < 1440) return Math.floor(d/60)+' 小时前';
+    return Math.floor(d/1440)+' 天前';
+  }
+
+  /* ── 计划时间：rrule 翻成人话 ── */
+  var DOW={SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+  var DN=['周日','周一','周二','周三','周四','周五','周六'];
+  function scheduleText(rr){
+    if(!rr) return '未设置';
+    var d={};
+    String(rr).split(';').forEach(function(p){
+      var i=p.indexOf('='); if(i>0) d[p.slice(0,i).toUpperCase()]=p.slice(i+1);
+    });
+    var f=(d.FREQ||'').toUpperCase(), hh=d.BYHOUR, mm=d.BYMINUTE;
+    var tm = (hh!=null? pad(+hh)+':'+pad(+(mm||0)) : '');
+    if(f==='DAILY'){
+      if(d.INTERVAL && +d.INTERVAL>1) return '每 '+d.INTERVAL+' 天 '+tm;
+      return '每天 '+tm;
+    }
+    if(f==='WEEKLY'){
+      var ds=(d.BYDAY||'').split(',').filter(Boolean).map(function(x){return DN[DOW[x]]||x;});
+      var base = ds.length? '每'+ds.join('、') : '每周';
+      if(d.INTERVAL && +d.INTERVAL>1) base = '每 '+d.INTERVAL+' 周（'+ds.join('、')+'）';
+      return base + (tm? ' '+tm : '');
+    }
+    if(f==='MONTHLY'){
+      return '每月 '+(d.BYMONTHDAY||'?')+' 日 '+tm;
+    }
+    if(f==='HOURLY'){
+      return '每 '+(d.INTERVAL||1)+' 小时';
+    }
+    if(f==='YEARLY'){
+      return '每年 '+(d.BYMONTH||'?')+' 月 '+(d.BYMONTHDAY||'?')+' 日 '+tm;
+    }
+    return String(rr);
+  }
+
+  /* ── 运行结果徽标 ── */
+  var RUN_ST = {
+    'SUCCESS':['b-ok','成功'],
+    'FAILED':['b-bad','失败'],
+    'RUNNING':['b-run','运行中'],
+    'STALE':['b-warn','卡住'],
+    'MISSED':['b-bad','漏跑'],
+    'NOT_INSTRUMENTED':['b-gray','无记录']
+  };
+  function runBadge(st){
+    var v=RUN_ST[st];
+    return v? '<span class="badge '+v[0]+'">'+v[1]+'</span>'
+            : '<span class="badge b-gray">未知</span>';
+  }
+  function prodTag(isProd, archived){
+    if(archived) return ' <span class="badge b-gray" title="早期人工验证记录，已归档；只作历史参考，不参与生产判定">验证·归档</span>';
+    return isProd===false? ' <span class="badge b-warn" title="dry-run / 试跑，不是生产运行">验证</span>' : '';
+  }
+
+  /* ══════════ 一、系统状态 ══════════ */
+  function barColor(p){
+    if(p==null) return 'var(--gray)';
+    if(p>=90) return 'var(--bad)';
+    if(p>=75) return 'var(--warn)';
+    return 'var(--ok)';
+  }
+  function sysCard(icon, label, main, unit, sub, pct){
+    var na = (main===null || main===undefined);
+    var h = '<div class="syscard'+(na?' na':'')+'">';
+    h += '<div class="lab">'+label+'</div>';
+    h += '<div class="val">'+(na? '暂不可用' : esc(main)+(unit?'<span class="u">'+unit+'</span>':''))+'</div>';
+    h += '<div class="sub">'+esc(sub||'')+'</div>';
+    if(!na && pct!=null){
+      h += '<div class="bar"><i style="width:'+Math.min(100,Math.max(0,pct))+'%;background:'+barColor(pct)+'"></i></div>';
+    }
+    return h+'</div>';
+  }
+  function renderSys(){
+    var g = $('sysgrid');
+    if(!SYS){
+      g.innerHTML = sysCard('','CPU',null) + sysCard('','内存',null) +
+                    sysCard('','磁盘',null) + sysCard('','网络',null);
+      $('sys-time').textContent = '采集时间 —';
+      $('sys-src').textContent = '系统状态读取失败，未显示任何推测值。';
+      return;
+    }
+    var c=SYS.cpu, m=SYS.memory, d=SYS.disk, n=SYS.network;
+    var h='';
+    h += sysCard('','CPU', c? c.percent : null, '%',
+                 c? (c.cores? c.cores+' 逻辑核' : '') : '采集失败',
+                 c? c.percent : null);
+    h += sysCard('','内存', m? Math.round(m.percent) : null, '%',
+                 m? fmtBytes(m.used)+' / '+fmtBytes(m.total)+' 已用' : '采集失败',
+                 m? m.percent : null);
+    h += sysCard('','磁盘', d? Math.round(d.percent) : null, '%',
+                 d? fmtBytes(d.used)+' / '+fmtBytes(d.total)+'，剩余 '+fmtBytes(d.free) : '采集失败',
+                 d? d.percent : null);
+    var netMain = n? (n.state==='online'?'正常': n.state==='limited'?'受限': n.state==='offline'?'未连接':'未知') : null;
+    var netSub = n? (n.text + (n.interface? ' · '+n.interface : '')) : '采集失败';
+    h += '<div class="syscard'+(n?'':' na')+'">'+
+         '<div class="lab">网络</div>'+
+         '<div class="val" style="font-size:'+(n?'22':'18')+'px;color:'+
+           (n? (n.state==='online'?'var(--ok)': n.state==='offline'?'var(--bad)':'var(--warn)') : 'var(--tx3)')+'">'+
+           esc(n? netMain : '暂不可用')+'</div>'+
+         '<div class="sub">'+esc(netSub)+'</div>'+
+         (n? '<div class="srcnote" style="margin-top:6px">'+esc(n.method||'')+
+             (n.scope? ' · '+esc(n.scope):'')+'</div>' : '')+
+         '</div>';
+    g.innerHTML = h;
+
+    $('sys-time').textContent = '采集时间 '+(SYS.collected_at||'—')+
+      (SYS.elapsed_ms!=null? ' · '+SYS.elapsed_ms+'ms':'');
+    var srcs=[];
+    if(c) srcs.push('CPU：'+c.method);
+    if(m) srcs.push('内存：'+m.method);
+    if(d) srcs.push('磁盘：'+d.method);
+    if(n) srcs.push('网络：'+n.method+(n.scope? '（'+n.scope+'）':''));
+    $('sys-src').textContent = srcs.join('　｜　') || '部分指标不可用，未做任何估算替代。';
+  }
+  function loadSys(force){
+    return fetch('api/sys', {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.ok){ SYS = d.sys; sysFailedOnce = false; }
+        else { SYS = null; sysFailedOnce = true; }
+        renderSys(); renderNotices();
+      })
+      .catch(function(){ SYS = null; sysFailedOnce = true; renderSys(); renderNotices(); });
+  }
+
+  /* ══════════ 二、统计 ══════════ */
+  function wbItems(){ return (A && A.items) || []; }
+  function runSummary(){ return (R && R.summary) || {}; }
+  function runTasks(){ return (R && R.tasks) || {}; }
+  function taskRuns(id){ return runTasks()[id] || null; }
+
+  function renderStats(){
+    var localTotal = (S && S.counts && S.counts.total) || 0;
+    var wbAll = wbItems();
+    var wbActive = wbAll.filter(function(x){return x.status==='ACTIVE';}).length;
+    var wbPaused = wbAll.filter(function(x){return x.status==='PAUSED';}).length;
+
+    var lastOk=0, lastBad=0;
+    wbAll.concat((S&&S.tasks)||[]).forEach(function(x){
+      var t = taskRuns(x.id || x.label);
+      var st = t && t.last && t.last.status;
+      if(st==='SUCCESS') lastOk++;
+      else if(st==='FAILED' || st==='MISSED') lastBad++;
+    });
+
+    var s = runSummary();
+    var cells = [
+      {k:'Mac 本地任务', n:localTotal, cls:'', go:'local'},
+      {k:'WorkBuddy 任务', n:wbAll.length, cls:'', go:'wb'},
+      {k:'已启用', n:wbActive, cls:'ok', go:'wbOn'},
+      {k:'已暂停', n:wbPaused, cls:'', go:'wbOff'},
+      {k:'最近成功', n:lastOk, cls:'ok', go:'runOk'},
+      {k:'最近失败', n:lastBad, cls:(lastBad?'bad':''), go:'runBad'}
+    ];
+    $('stats').innerHTML = cells.map(function(c){
+      return '<div class="stat '+c.cls+'" data-go="'+c.go+'">'+
+             '<div class="n">'+c.n+'</div><div class="k">'+esc(c.k)+'</div></div>';
+    }).join('');
+
+    var rt = (R && R.generated_at) || '—';
+    $('runs-time').textContent = '运行记录汇总于 '+rt+'　｜　共 '+(s.total||0)+' 条记录'+
+      (s.VERIFICATION? '（含 ' + s.VERIFICATION + ' 条验证运行，不计入生产）':'');
+    $('hostname').textContent = (S&&S.host)? S.host : '';
+  }
+
+  /* ══════════ 三、列表 ══════════ */
+  var state = { tab:'all', q:'', vendor:'', sstate:'', run:'' };
+
+  function localRows(){
+    return ((S && S.tasks) || []).map(function(t){
+      var rt = taskRuns(t.label);
+      return {kind:'local', id:t.label, name:t.label, vendor:t.vendor||'—',
+              schedule:t.schedule||'—', state:t.state||'未知', risk:t.risk||{},
+              raw:t, run:rt};
+    });
+  }
+  function wbRows(){
+    return wbItems().map(function(a){
+      return {kind:'wb', id:a.id, name:a.name, schedule:scheduleText(a.rrule),
+              state:a.status==='ACTIVE'?'已启用':(a.status==='PAUSED'?'已暂停':a.status),
+              raw:a, run:taskRuns(a.id)};
+    });
+  }
+  function allRows(){ return localRows().concat(wbRows()); }
+
+  /* 默认排序：配置为启用 / 正在跑的任务排最前。
+     本机「运行中」= launchd 进程在跑；WorkBuddy「已启用」= 配置为启用，
+     两个概念不同，但在「会不会自己跑起来」这件事上同组。
+     同组内按最近执行时间倒序（跑过的、新的在前），再按名称。 */
+  var STATE_RANK = {'运行中':0, '已启用':0, '等待中':1, '未运行':1, '已初始化':1,
+                    '未加载':2, '已暂停':2};
+  function stateRank(r){
+    var k = STATE_RANK[r.state];
+    return k == null ? 3 : k;
+  }
+  function lastTs(r){
+    var l = r.run && r.run.last;
+    if(!l) return 0;
+    var s = l.started_at || l.ended_at;
+    if(!s) return 0;
+    var t = new Date(String(s).replace(' ','T')).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  function sortRows(rows){
+    return rows.slice().sort(function(a,b){
+      var d = stateRank(a) - stateRank(b);
+      if(d) return d;
+      d = lastTs(b) - lastTs(a);
+      if(d) return d;
+      return String(a.name).localeCompare(String(b.name), 'zh-Hans-CN');
+    });
+  }
+
+  function runCell(r){
+    var t=r.run, l=t&&t.last;
+    if(!l || l.status==='NOT_INSTRUMENTED'){
+      // 本机任务没有包装器日志，但 launchd 本身有「累计启动次数 + 上次退出码」，
+      // 这是能拿到的真实执行信号，不该丢掉，也不该说成「成功」。
+      var raw=r.raw||{};
+      if(r.kind==='local' && (raw.runs!=null || raw.last_exit!=null)){
+        var rc = raw.last_exit;
+        var bad = (rc!=null && String(rc)!=='0');
+        var txt = (rc==null? '无退出码' : '退出码 '+(String(rc)==='0'?'0':'非 0'));
+        return '<span class="badge '+(bad?'b-warn':'b-gray')+'">'+esc(txt)+'</span>'+
+               '<span class="sub2">launchd：累计 '+esc(raw.runs==null?'—':raw.runs)+
+               ' 次启动'+(bad? '，上次非正常退出':'')+'</span>';
+      }
+      return '<span class="badge b-gray">未提供运行记录</span>'+
+             '<span class="sub2">无法确认是否执行，不默认成功</span>';
+    }
+    var st=l.status, sub='';
+    if(st==='SUCCESS' || st==='FAILED'){
+      sub = fmtDT(l.started_at) + (l.duration_ms!=null? ' · '+(l.duration_ms/1000).toFixed(1)+'s':'');
+    } else if(st==='MISSED'){
+      sub = '应跑 '+fmtDT(l.expected_at)+'，无记录';
+    } else if(st==='STALE'){
+      sub = '已 '+(l.stale_minutes||'?')+' 分钟未结束';
+    } else if(st==='RUNNING'){
+      sub = '进行中，尚未结束';
+    }
+    var title = l.error || '';
+    return '<span title="'+esc(title)+'">'+runBadge(st)+prodTag(l.is_production)+'</span>'+
+           '<span class="sub2">'+esc(sub)+'</span>';
+  }
+
+  function matchRunFilter(r){
+    if(!state.run) return true;
+    var l = r.run && r.run.last;
+    var st = l && l.status;
+    if(state.run==='failed') return st==='FAILED' || st==='MISSED';
+    if(state.run==='ok') return st==='SUCCESS';
+    if(state.run==='missed') return st==='MISSED';
+    if(state.run==='none') return !l || st==='NOT_INSTRUMENTED';
+    return true;
+  }
+
+  function filtered(){
+    var q = state.q.trim().toLowerCase();
+    return allRows().filter(function(r){
+      if(state.tab==='local' && r.kind!=='local') return false;
+      if(state.tab==='wb' && r.kind!=='wb') return false;
+      if(state.vendor && r.kind==='local' && (r.vendor||'') !== state.vendor) return false;
+      if(state.sstate && r.state !== state.sstate) return false;
+      if(!matchRunFilter(r)) return false;
+      if(q){
+        var hay = [r.name, r.vendor, r.schedule, r.state].join(' ').toLowerCase();
+        if(hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderThead(){
+    var h;
+    if(state.tab==='wb'){
+      h = '<th style="width:34%">任务名称</th><th style="width:12%">配置状态</th>'+
+          '<th style="width:26%">计划执行</th><th style="width:28%">最近执行</th>';
+    } else if(state.tab==='local'){
+      h = '<th style="width:32%">任务名称</th><th style="width:16%">归属软件</th>'+
+          '<th style="width:22%">调度方式</th><th style="width:12%">进程状态</th>'+
+          '<th style="width:18%">最近执行</th>';
+    } else {
+      h = '<th style="width:30%">任务名称</th><th style="width:10%">类型</th>'+
+          '<th style="width:22%">调度 / 计划</th><th style="width:10%">状态</th>'+
+          '<th style="width:28%">最近执行</th>';
+    }
+    $('thead').innerHTML = h;
+  }
+
+  function renderList(){
+    renderThead();
+    var rows = sortRows(filtered());
+    $('tbody').innerHTML = rows.map(function(r){
+      var nameCell = '<td class="trunc"><span class="nm" title="'+esc(r.name)+'">'+esc(r.name)+'</span>'+
+        (r.kind==='wb'? '<span class="sub2">'+esc(r.schedule)+'</span>' : '')+'</td>';
+      var kindCell = '<td>'+(r.kind==='wb'? '<span class="badge b-info">平台</span>'
+                                          : '<span class="badge b-gray">本机</span>')+'</td>';
+      var mid;
+      if(state.tab==='local'){
+        mid = '<td class="trunc dim" title="'+esc(r.vendor)+'">'+esc(r.vendor)+'</td>'+
+              '<td class="trunc" title="'+esc(r.schedule)+'">'+esc(r.schedule)+'</td>'+
+              '<td>'+stateBadge(r.state)+'</td>';
+      } else if(state.tab==='wb'){
+        mid = '<td>'+stateBadge(r.state)+'</td>'+
+              '<td class="trunc dim">'+esc(r.schedule)+'</td>';
+      } else {
+        mid = '<td class="trunc dim">'+esc(r.schedule)+'</td>'+
+              '<td>'+stateBadge(r.state)+'</td>';
+      }
+      var tds = state.tab==='all'
+        ? nameCell + '<td><span class="badge '+(r.kind==='wb'?'b-info':'b-gray')+'">'+
+              (r.kind==='wb'?'平台':'本机')+'</span></td>' + 
+              '<td class="trunc dim">'+esc(r.schedule)+'</td>' +
+              '<td>'+stateBadge(r.state)+'</td>'
+        : nameCell + mid;
+      return '<tr data-kind="'+r.kind+'" data-id="'+esc(r.id)+'">'+tds+
+             '<td>'+runCell(r)+'</td></tr>';
+    }).join('');
+
+    $('empty').style.display = rows.length? 'none' : 'block';
+    $('list-count').textContent = '显示 '+rows.length+' / '+allRows().length+
+      ' 条　·　已启用 / 运行中的排在前面，同组按最近执行时间倒序';
+  }
+
+  function stateBadge(s){
+    if(s==='已启用'||s==='运行中') return '<span class="badge b-ok">'+esc(s)+'</span>';
+    if(s==='已暂停') return '<span class="badge b-gray">'+esc(s)+'</span>';
+    if(s==='未运行'||s==='未加载') return '<span class="badge b-gray">'+esc(s)+'</span>';
+    if(s==='等待中'||s==='已初始化') return '<span class="badge b-info">'+esc(s)+'</span>';
+    return '<span class="badge b-gray">'+esc(s||'未知')+'</span>';
+  }
+
+  function rebuildFilters(){
+    var vs={}, ss={};
+    localRows().forEach(function(r){ vs[r.vendor]=1; ss[r.state]=1; });
+    var fv=$('f-vendor'), cur=fv.value;
+    fv.innerHTML = '<option value="">全部归属</option>' +
+      Object.keys(vs).sort().map(function(v){
+        return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+    fv.value = cur;
+
+    var fs=$('f-state'), cur2=fs.value;
+    fs.innerHTML = '<option value="">全部状态</option>' +
+      Object.keys(ss).sort().map(function(v){
+        return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+    fs.value = cur2;
+  }
+
+  function renderChips(){
+    var box=$('chips');
+    var defs;
+    if(state.tab==='wb'){
+      defs=[{id:'',t:'全部'},{id:'on',t:'已启用'},{id:'off',t:'已暂停'}];
+    } else if(state.tab==='local'){
+      defs=[{id:'',t:'全部'},{id:'running',t:'运行中'},{id:'stopped',t:'未运行'}];
+    } else {
+      defs=[{id:'',t:'全部'}];
+    }
+    box.innerHTML = defs.map(function(d){
+      var on = (d.id==='' && !state.sstate && !chipState) || (chipState===d.id);
+      return '<span class="chip'+(on?' on':'')+'" data-chip="'+d.id+'">'+esc(d.t)+'</span>';
+    }).join('');
+  }
+  var chipState='';
+
+  /* ══════════ 详情抽屉 ══════════ */
+  var curTask = null;
+
+  function openTask(kind, id, name){
+    curTask = {kind:kind, id:id, name:name};
+    $('dr-title').textContent = name || id;
+    $('dr-sub').textContent = (kind==='wb'? 'WorkBuddy 自动任务' : 'Mac 本地任务') + ' · ' + id;
+    $('dr-body').innerHTML = '<div class="dim">正在读取运行记录…</div>';
+    $('mask').classList.add('on');
+    $('drawer').classList.add('on');
+    $('drawer').setAttribute('aria-hidden','false');
+
+    fetch('api/log?task_id='+encodeURIComponent(id), {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ renderDrawer(d); })
+      .catch(function(){
+        $('dr-body').innerHTML = '<div class="notice bad">读取失败：日志接口没有响应</div>';
+      });
+  }
+  function closeTask(){
+    $('mask').classList.remove('on');
+    $('drawer').classList.remove('on');
+    $('drawer').setAttribute('aria-hidden','true');
+    curTask = null;
+  }
+
+  function statusText(st){
+    return (RUN_ST[st]||[,'未知'])[1];
+  }
+
+  function renderDrawer(d){
+    if(!d || !d.ok){
+      $('dr-body').innerHTML = '<div class="notice bad">'+esc((d&&d.error)||'没有这个任务的记录')+'</div>';
+      return;
+    }
+    var s = d.summary || {};
+    var h = '';
+
+    h += '<h4>运行摘要</h4>';
+    h += '<div class="kv">';
+    h += '<div class="k">最近执行</div><div class="v">'+esc(fmtDT(s.last_at))+
+         (s.last_at? '　<span class="dim">('+esc(ageText(s.last_at))+')</span>':'')+'</div>';
+    h += '<div class="k">结果</div><div class="v">'+runBadge(s.status)+
+         (s.is_production===false? ' <span class="badge b-warn">验证运行，非生产</span>':'')+'</div>';
+    h += '<div class="k">耗时</div><div class="v">'+
+         (s.duration_ms!=null? (s.duration_ms/1000).toFixed(1)+' 秒':'未提供')+'</div>';
+    if(s.ended_at) h += '<div class="k">结束时间</div><div class="v">'+esc(fmtDT(s.ended_at))+'</div>';
+    if(s.expected_at) h += '<div class="k">计划时间</div><div class="v">'+esc(fmtDT(s.expected_at))+'</div>';
+    h += '<div class="k">数据来源</div><div class="v">'+
+         esc(s.source==='wb_db'? 'WorkBuddy 平台记录'
+            : s.source==='wrapper'? '本项目包装器日志'
+            : s.source || '无')+'</div>';
+    if(s.trigger) h += '<div class="k">触发方式</div><div class="v">'+esc(s.trigger)+'</div>';
+    if(s.rows!=null) h += '<div class="k">处理行数</div><div class="v">'+esc(s.rows)+' 行</div>';
+    if(s.launchd){
+      var ld=s.launchd;
+      h += '<div class="k">进程状态</div><div class="v">'+stateBadge(ld.state||'未知')+'</div>';
+      h += '<div class="k">launchd</div><div class="v">累计启动 '+
+           esc(ld.runs==null?'未提供':ld.runs)+' 次'+
+           (ld.last_exit!=null? '，上次退出码 '+esc(ld.last_exit):'')+
+           '<span class="dim">（只有计数与退出码，无逐次历史）</span></div>';
+      if(ld.schedule) h += '<div class="k">调度方式</div><div class="v">'+esc(ld.schedule)+'</div>';
+      if(ld.vendor) h += '<div class="k">归属软件</div><div class="v">'+esc(ld.vendor)+'</div>';
+    }
+    h += '<div class="k">错误</div><div class="v">'+
+         (s.error? '<span style="color:var(--bad)">'+esc(s.error)+'</span>' : '<span class="dim">无</span>')+'</div>';
+    h += '</div>';
+
+    var t = runTasks()[d.task_id];
+    var hist = (t && t.history) || [];
+    var hasDry = hist.some(function(x){ return x.is_production === false; });
+
+    h += '<h4>历史记录<span class="dim" style="font-weight:400"> · 共 '+
+         (s.history_count||0)+' 条</span></h4>';
+    if(hasDry){
+      h += '<div class="hint" style="margin:-4px 0 8px">「最近执行」只取生产运行；'+
+           '标「验证」的是 dry-run / 试跑记录，不会顶替生产结果。</div>';
+    }
+    if(!hist.length){
+      h += '<div class="dim" style="font-size:13px">该任务暂无运行记录。没有记录不等于成功，也不等于失败。</div>';
+    } else {
+      h += '<table style="table-layout:auto"><thead><tr>'+
+           '<th>开始</th><th>结果</th><th>耗时</th><th>来源</th><th>说明</th>'+
+           '</tr></thead><tbody>'+
+           hist.map(function(x){
+             return '<tr style="cursor:default">'+
+               '<td style="white-space:nowrap">'+esc(fmtDT(x.started_at))+'</td>'+
+               '<td>'+runBadge(x.status)+prodTag(x.is_production, x.archived)+'</td>'+
+               '<td>'+esc(x.duration_ms!=null? (x.duration_ms/1000).toFixed(1)+'s':'—')+'</td>'+
+               '<td class="dim">'+esc(x.source==='wb_db'? '平台':'包装器')+'</td>'+
+               '<td class="dim" style="word-break:break-word">'+esc(x.error||'—')+'</td></tr>';
+           }).join('')+'</tbody></table>';
+    }
+
+    h += '<h4>日志来源</h4>';
+    (d.sources||[]).forEach(function(src){
+      h += '<div class="srcrow">'+
+           '<button type="button" data-src="'+esc(src.id)+'"'+(src.available?'':' disabled')+'>'+
+             (src.available? '查看详细日志' : '不可用')+'</button>'+
+           '<div><div class="lbl">'+esc(src.label)+'</div>'+
+           (src.reason? '<div class="why">'+esc(src.reason)+'</div>':'')+'</div>'+
+           '</div>';
+    });
+    h += '<div class="hint">日志只从白名单内的文件读取，已脱敏（凭据、IP、邮箱、长数字串），最多 300 行。</div>';
+
+    h += '<h4>详细日志</h4>';
+    h += '<div class="logbox" id="logbox"></div>';
+    h += '<div style="display:flex;gap:8px;margin-top:8px">'+
+         '<button type="button" id="btn-copy">复制脱敏日志</button>'+
+         '<span class="dim" style="font-size:12px;align-self:center" id="log-note"></span></div>';
+
+    $('dr-body').innerHTML = h;
+
+    var box = $('dr-body');
+    box.querySelectorAll('button[data-src]').forEach(function(b){
+      b.addEventListener('click', function(){
+        loadLog(d.task_id, b.getAttribute('data-src'), b);
+      });
+    });
+    $('btn-copy').addEventListener('click', copyLog);
+
+    // 自动展开第一个可用来源，省一次点击
+    var first = (d.sources||[]).filter(function(x){ return x.available; })[0];
+    if(first) loadLog(d.task_id, first.id, box.querySelector('button[data-src="'+first.id+'"]'));
+  }
+
+  var lastLogText = '';
+  function loadLog(taskId, source, btn){
+    var box = $('logbox');
+    if(!box) return;
+    box.textContent = '正在读取…';
+    $('log-note').textContent = '';
+    fetch('api/log?task_id='+encodeURIComponent(taskId)+'&source='+encodeURIComponent(source),
+          {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d.ok){
+          box.textContent = '暂无详细日志：' + (d.error||'读取失败');
+          lastLogText = '';
+          return;
+        }
+        var txt = (d.lines||[]).join('\n');
+        if(!txt){ box.textContent = '暂无详细日志'; lastLogText=''; return; }
+        box.textContent = txt;
+        lastLogText = txt;
+        $('log-note').textContent = (d.truncated? '已截断，仅显示最近部分' : '') +
+                                    (d.reason? ' ' + d.reason : '');
+        box.scrollTop = box.scrollHeight;
+      })
+      .catch(function(){ box.textContent = '暂无详细日志：接口无响应'; });
+  }
+
+  function copyLog(){
+    var txt = lastLogText || ($('logbox') && $('logbox').textContent) || '';
+    if(!txt || txt==='暂无详细日志'){ $('log-note').textContent='没有可复制的内容'; return; }
+    var done = function(){ $('log-note').textContent = '已复制（脱敏后的内容）'; };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
+    } else { fallbackCopy(txt, done); }
+  }
+  function fallbackCopy(txt, cb){
+    var ta=document.createElement('textarea');
+    ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); cb(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  /* ══════════ 提示条 ══════════ */
+  var dismissed = {};
+  function renderNotices(){
+    var items=[];
+    // 1) 采集器心跳
+    if(ST && ST.collected_at){
+      var mins = Math.floor((Date.now() - new Date(String(ST.collected_at).replace(' ','T')).getTime())/60000);
+      if(mins > 30){
+        items.push({k:'warn', t:'采集器已 '+mins+' 分钟没有更新（最后 '+ST.collected_at+
+          '），下面的数据可能不是最新的。'});
+      }
+    } else {
+      items.push({k:'info', t:'尚未收到采集器心跳。任务与运行记录仍可看，但不会自动更新（打开页面会刷一次）。'});
+    }
+    if(ST && ST.health && ST.health.db_ok===false){
+      items.push({k:'warn', t:'读不到 WorkBuddy 运行记录数据库，运行历史可能不完整。'});
+    }
+    // 2) 最近运行异常：失败/漏跑都列出来，已暂停的单独标注，避免和「最近失败」数字对不上
+    var bad=[];
+    wbItems().forEach(function(a){
+      var t=runTasks()[a.id], l=t&&t.last;
+      if(!l || (l.status!=='FAILED' && l.status!=='MISSED')) return;
+      bad.push({id:a.id, name:t.name||a.name, st:l.status, at:l.started_at,
+                err:l.error, paused:(a.status!=='ACTIVE')});
+    });
+    bad.forEach(function(b){
+      var tail = (b.at? ' · ' + fmtDT(b.at) : '') + (b.err? ' · ' + b.err : '');
+      items.push({k: b.paused? 'warn' : 'bad',
+        t:'最近运行' + statusText(b.st) + '：' + b.name +
+          (b.paused? '（该任务当前已暂停）':'') + tail});
+    });
+    // 3) 扫描/采集错误
+    if(S && S.errors && S.errors.length){
+      items.push({k:'warn', t:'本机任务扫描有 '+S.errors.length+' 项异常（个别 plist 无法解析）'});
+    }
+    if(SYS===null && !sysFailedOnce){
+      // 首次加载还没结果时不报错
+    } else if(SYS===null){
+      items.push({k:'warn', t:'系统状态采集失败，CPU / 内存 / 磁盘 / 网络显示为「暂不可用」。'});
+    }
+
+    var box=$('notices');
+    box.innerHTML = items.map(function(it,i){
+      if(dismissed[it.t]) return '';
+      return '<div class="notice '+it.k+'"><span>'+esc(it.t)+'</span>'+
+             '<span class="x" data-i="'+i+'" title="隐藏">×</span></div>';
+    }).join('');
+    box.querySelectorAll('.x').forEach(function(x){
+      x.addEventListener('click', function(){
+        dismissed[items[+x.getAttribute('data-i')].t]=1;
+        x.parentNode.style.display='none';
+      });
+    });
+  }
+
+  /* ══════════ 刷新 ══════════ */
+  var busy=false, sysFailedOnce=false;
+  function setBusy(b){
+    busy=b;
+    $('btn-refresh').disabled=b;
+    $('btn-refresh').textContent = b? '刷新中…' : '刷新';
+  }
+  function applyPayload(d){
+    if(d.system) S=d.system;
+    if(d.automations) A=d.automations;
+    if(d.runs) R=d.runs;
+    if(d.state) ST=d.state;
+    renderStats(); rebuildFilters(); renderList(); renderNotices();
+    $('meta').textContent = '任务数据 ' + ((S&&S.generated_at)||'—') +
+      '　·　运行记录 ' + ((R&&R.generated_at)||'—');
+  }
+  function doRefresh(){
+    if(busy) return;
+    setBusy(true);
+    fetch('api/refresh', {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.ok){
+          applyPayload(d);
+        } else {
+          // 失败：保留旧数据，只提示
+          renderNotices();
+          $('meta').textContent = '刷新失败（显示的是 ' + ((S&&S.generated_at)||'上次') + ' 的数据）';
+        }
+      })
+      .catch(function(){
+        $('meta').textContent = '刷新失败：本机服务没有响应（保留上次数据）';
+      })
+      .finally(function(){ setBusy(false); });
+  }
+
+  /* ══════════ 事件 ══════════ */
+  $('btn-refresh').addEventListener('click', function(){ doRefresh(); loadSys(true); });
+
+  $('tabs').addEventListener('click', function(e){
+    var b=e.target.closest('button[data-tab]'); if(!b) return;
+    Array.prototype.forEach.call(this.children, function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    state.tab=b.getAttribute('data-tab');
+    state.sstate=''; chipState='';
+    renderChips(); renderList();
+  });
+  $('q').addEventListener('input', function(){ state.q=this.value; renderList(); });
+  $('f-vendor').addEventListener('change', function(){ state.vendor=this.value; renderList(); });
+  $('f-state').addEventListener('change', function(){ state.sstate=this.value; renderList(); });
+  $('f-run').addEventListener('change', function(){ state.run=this.value; renderList(); });
+  $('clear').addEventListener('click', function(){
+    state.q=''; state.vendor=''; state.sstate=''; state.run=''; chipState='';
+    $('q').value=''; $('f-vendor').value=''; $('f-state').value=''; $('f-run').value='';
+    renderChips(); renderList();
+  });
+  $('chips').addEventListener('click', function(e){
+    var c=e.target.closest('[data-chip]'); if(!c) return;
+    chipState=c.getAttribute('data-chip');
+    if(!chipState){ state.sstate=''; }
+    else if(chipState==='on'){ state.sstate='已启用'; }
+    else if(chipState==='off'){ state.sstate='已暂停'; }
+    else if(chipState==='running'){ state.sstate='运行中'; }
+    else if(chipState==='stopped'){ state.sstate='未运行'; }
+    $('f-state').value = state.sstate;
+    renderChips(); renderList();
+  });
+  $('tbody').addEventListener('click', function(e){
+    var tr=e.target.closest('tr[data-id]'); if(!tr) return;
+    var id=tr.getAttribute('data-id'), kind=tr.getAttribute('data-kind');
+    var name = tr.querySelector('.nm') ? tr.querySelector('.nm').textContent : id;
+    openTask(kind, id, name);
+  });
+  $('stats').addEventListener('click', function(e){
+    var c=e.target.closest('[data-go]'); if(!c) return;
+    var g=c.getAttribute('data-go');
+    if(g==='local'){ setTab('local'); }
+    else if(g==='wb'){ setTab('wb'); }
+    else if(g==='wbOn'){ setTab('wb'); state.sstate='已启用'; $('f-state').value='已启用'; renderList(); }
+    else if(g==='wbOff'){ setTab('wb'); state.sstate='已暂停'; $('f-state').value='已暂停'; renderList(); }
+    else if(g==='runOk'){ state.run='ok'; $('f-run').value='ok'; renderList(); }
+    else if(g==='runBad'){ state.run='failed'; $('f-run').value='failed'; renderList(); }
+  });
+  function setTab(t){
+    state.tab=t; state.sstate=''; chipState='';
+    $('f-state').value='';
+    Array.prototype.forEach.call($('tabs').children, function(x){
+      x.classList.toggle('on', x.getAttribute('data-tab')===t);
+    });
+    renderChips(); renderList();
+  }
+
+  $('dr-close').addEventListener('click', closeTask);
+  $('mask').addEventListener('click', closeTask);
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape') closeTask();
+  });
+
+  /* 系统状态定时刷新（与任务列表解耦） */
+  var sysTimer=null;
+  function scheduleSys(){
+    if(sysTimer) clearInterval(sysTimer);
+    var sec=parseInt($('sys-iv').value,10)||0;
+    if(sec>0){
+      sysTimer=setInterval(function(){ loadSys(); }, sec*1000);
+    }
+  }
+  $('sys-iv').addEventListener('change', function(){
+    try{ localStorage.setItem('wb_sys_iv', this.value); }catch(e){}
+    scheduleSys();
+  });
+
+  /* 切回页面时补一次系统状态 */
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') loadSys();
+  });
+
+  /* ══════════ 首次渲染 ══════════ */
+  try{
+    var saved = localStorage.getItem('wb_sys_iv');
+    if(saved!==null) $('sys-iv').value = saved;
+  }catch(e){}
+
+  renderStats(); rebuildFilters(); renderChips(); renderList(); renderNotices();
+  $('meta').textContent = '任务数据 ' + ((S&&S.generated_at)||'—') +
+      '　·　运行记录 ' + ((R&&R.generated_at)||'—');
+
+  loadSys();
+  scheduleSys();
+
+  // 支持 ?task=<id> 直接打开某个任务的详情（方便收藏/排查时直达）
+  try{
+    var qp = new URLSearchParams(location.search);
+    var t0 = qp.get('task');
+    if(t0){
+      var hit = allRows().filter(function(r){ return r.id===t0; })[0];
+      if(hit) openTask(hit.kind, hit.id, hit.name);
+    }
+  }catch(e){}
+
+  // 打开页面先刷一次任务数据（需求要求「打开时自动刷新」，不依赖采集器是否装好）
+  doRefresh();
+})();
+</script>
+</body>
+</html>

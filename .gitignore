@@ -1,0 +1,20 @@
+# ── 运行数据（每台机器各自生成，绝不入库）──
+data/
+logs_allow.json
+task_profiles.json
+
+# ── 备份 ──
+backups/
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ── macOS ──
+.DS_Store
+._*
+
+# ── 编辑器 ──
+.vscode/
+.idea/
