@@ -39,12 +39,15 @@ Mac 上的定时任务散落在三处：`launchd`（系统 + 各种软件）、`
 前置：macOS，自带 `python3`（3.9+ 即可，不需要 `pip install`）。
 
 ```bash
-git clone <这个仓库的地址> mac-task-workbench
+git clone https://github.com/MSsxj/mac-task-workbench.git
 cd mac-task-workbench
 python3 serve.py
 ```
 
 浏览器会自动打开 `http://127.0.0.1:8765`。首次启动会自动扫一遍本机任务。
+
+> **刚打开是空的、或者任务很少，这是正常的。** 它不预置任何示例数据，页面上每一条都来自你当前这台机器。
+> 想让它有更多内容：跑一遍 `python3 scan_tasks.py` 重新扫描，或者在 `采集器` 安装后等 5 分钟自动采一轮。
 
 只想扫一次、不做常驻服务：
 
