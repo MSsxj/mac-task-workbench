@@ -649,8 +649,9 @@ tbody tr:active{background:var(--hov1a)}
   }
   function wbRows(){
     return wbItems().map(function(a){
-      return {kind:'wb', id:a.id, name:a.name, schedule:scheduleText(a.rrule),
-              state:a.status==='ACTIVE'?'已启用':(a.status==='PAUSED'?'已暂停':a.status),
+    return {kind:'wb', id:a.id, name:a.name, vendor:'WorkBuddy 平台',
+            schedule:scheduleText(a.rrule),
+            state:a.status==='ACTIVE'?'已启用':(a.status==='PAUSED'?'已暂停':a.status),
               raw:a, run:taskRuns(a.id)};
     });
   }
@@ -732,7 +733,9 @@ tbody tr:active{background:var(--hov1a)}
     return allRows().filter(function(r){
       if(state.tab==='local' && r.kind!=='local') return false;
       if(state.tab==='wb' && r.kind!=='wb') return false;
-      if(state.vendor && r.kind==='local' && (r.vendor||'') !== state.vendor) return false;
+      // 归属对两类任务一视同仁：平台任务统一归到「WorkBuddy 平台」。
+      // 旧写法只约束 local 行，选中某个本机归属时平台任务会全部漏进来。
+      if(state.vendor && (r.vendor||'—') !== state.vendor) return false;
       if(state.sstate && r.state !== state.sstate) return false;
       if(!matchRunFilter(r)) return false;
       if(q){
@@ -791,8 +794,22 @@ tbody tr:active{background:var(--hov1a)}
     }).join('');
 
     $('empty').style.display = rows.length? 'none' : 'block';
-    $('list-count').textContent = '显示 '+rows.length+' / '+allRows().length+
-      ' 条　·　已启用 / 运行中的排在前面，同组按最近执行时间倒序';
+    if(!rows.length){
+      $('empty').textContent = (state.q.trim()||state.vendor||state.sstate||state.run||state.tab!=='all')
+        ? '当前筛选条件下没有任务。点「清空筛选」可恢复全部。'
+        : '没有符合条件的任务';
+    }
+    // 把生效中的筛选条件显式写出来，避免「选了却看不出有没有生效」。
+    var RUN_LABEL = {failed:'最近失败', ok:'最近成功', missed:'漏跑', none:'无运行记录'};
+    var bits = [];
+    if(state.tab!=='all') bits.push(state.tab==='local'? 'Mac 本地' : 'WorkBuddy');
+    if(state.q.trim()) bits.push('搜索「'+state.q.trim()+'」');
+    if(state.vendor) bits.push('归属「'+state.vendor+'」');
+    if(state.sstate) bits.push('状态「'+state.sstate+'」');
+    if(state.run) bits.push(RUN_LABEL[state.run]||state.run);
+    $('list-count').textContent = '显示 '+rows.length+' / '+allRows().length+' 条'+
+      (bits.length? '　·　当前筛选：'+bits.join(' + ') : '')+
+      '　·　已启用 / 运行中的排在前面，同组按最近执行时间倒序';
   }
 
   function stateBadge(s){
@@ -804,19 +821,29 @@ tbody tr:active{background:var(--hov1a)}
   }
 
   function rebuildFilters(){
+    // 两个下拉都必须覆盖「合并后的全部行」，否则平台任务会绕过筛选，
+    // 或者 chip 设的「已启用 / 已暂停」在下拉里根本没有对应项可回显。
+    // 只列当前页签下真实存在的取值，避免出现「选了必然 0 条」的选项。
+    var pool = allRows().filter(function(r){
+      return state.tab==='all' ||
+             (state.tab==='local' && r.kind==='local') ||
+             (state.tab==='wb' && r.kind==='wb');
+    });
     var vs={}, ss={};
-    localRows().forEach(function(r){ vs[r.vendor]=1; ss[r.state]=1; });
+    pool.forEach(function(r){ vs[r.vendor||'—']=1; ss[r.state||'未知']=1; });
     var fv=$('f-vendor'), cur=fv.value;
     fv.innerHTML = '<option value="">全部归属</option>' +
-      Object.keys(vs).sort().map(function(v){
+      Object.keys(vs).sort(function(a,b){ return a.localeCompare(b,'zh-Hans-CN'); }).map(function(v){
         return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
     fv.value = cur;
+    state.vendor = fv.value;      // 旧值若已不在选项里，同步回 state，别让界面与筛选脱节
 
     var fs=$('f-state'), cur2=fs.value;
     fs.innerHTML = '<option value="">全部状态</option>' +
-      Object.keys(ss).sort().map(function(v){
+      Object.keys(ss).sort(function(a,b){ return a.localeCompare(b,'zh-Hans-CN'); }).map(function(v){
         return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
     fs.value = cur2;
+    state.sstate = fs.value;
   }
 
   function renderChips(){
@@ -1134,6 +1161,9 @@ tbody tr:active{background:var(--hov1a)}
     b.classList.add('on');
     state.tab=b.getAttribute('data-tab');
     state.sstate=''; chipState='';
+    $('f-state').value='';
+    pruneVendorForTab(state.tab);
+    rebuildFilters();
     renderChips(); renderList();
   });
   $('q').addEventListener('input', function(){ state.q=this.value; renderList(); });
@@ -1142,7 +1172,14 @@ tbody tr:active{background:var(--hov1a)}
   $('f-run').addEventListener('change', function(){ state.run=this.value; renderList(); });
   $('clear').addEventListener('click', function(){
     state.q=''; state.vendor=''; state.sstate=''; state.run=''; chipState='';
+    // 页签本身也是一种筛选（会计入「当前筛选」摘要），一并回到「全部」，
+    // 否则点完仍停在 WorkBuddy 页签，只显示 11 条，与「清空」二字不符。
+    state.tab='all';
+    Array.prototype.forEach.call($('tabs').children, function(x){
+      x.classList.toggle('on', x.getAttribute('data-tab')==='all');
+    });
     $('q').value=''; $('f-vendor').value=''; $('f-state').value=''; $('f-run').value='';
+    rebuildFilters();
     renderChips(); renderList();
   });
   $('chips').addEventListener('click', function(e){
@@ -1172,9 +1209,19 @@ tbody tr:active{background:var(--hov1a)}
     else if(g==='runOk'){ state.run='ok'; $('f-run').value='ok'; renderList(); }
     else if(g==='runBad'){ state.run='failed'; $('f-run').value='failed'; renderList(); }
   });
+  /* 切分类时若当前归属与新分类互斥，清掉归属；否则会出现
+     「切到 WorkBuddy 却还留着某个本机归属 → 一行都不显示」的死局。 */
+  function pruneVendorForTab(t){
+    if((t==='wb' && state.vendor && state.vendor!=='WorkBuddy 平台') ||
+       (t==='local' && state.vendor==='WorkBuddy 平台')){
+      state.vendor=''; $('f-vendor').value='';
+    }
+  }
   function setTab(t){
     state.tab=t; state.sstate=''; chipState='';
     $('f-state').value='';
+    pruneVendorForTab(t);
+    rebuildFilters();
     Array.prototype.forEach.call($('tabs').children, function(x){
       x.classList.toggle('on', x.getAttribute('data-tab')===t);
     });
