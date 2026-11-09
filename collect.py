@@ -39,6 +39,7 @@ import sys
 import atomic
 import build_runs
 import scan_tasks
+import state_history
 import wb_automations
 import wb_runlog
 
@@ -285,6 +286,15 @@ def collect(notify=True, quiet=True):
         }
         state["health"]["scan_ok"] = True
         state["health"]["scan_errors"] = len(data.get("errors") or [])
+
+        # 常驻守护进程的存活变动：只在 pid/状态变化时记一条。
+        # 对 KeepAlive 的任务，launchd 的 runs/last_exit 永远没有信息量，
+        # 「中间有没有掉过」才是这类任务真正可观测的事实。
+        try:
+            state["state_changes"] = state_history.observe(data.get("tasks") or [])
+        except Exception as e:      # 记不下存活变动不能拖垮整轮采集
+            state["state_changes"] = []
+            state["health"]["state_history_error"] = str(e)
     except Exception as e:      # 扫描失败也要写心跳，否则看板分不清「没跑」和「跑挂了」
         state["error"] = "本机任务扫描失败：%s" % e
         state["health"]["scan_ok"] = False

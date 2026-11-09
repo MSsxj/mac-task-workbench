@@ -29,6 +29,8 @@ import json
 import os
 import re
 
+import state_history
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
 RUNS_DIR = os.path.join(DATA, "runs")
@@ -326,8 +328,17 @@ def summary_for(task_id):
                         "available": True,
                         "reason": "平台只提供结果码与起止时间，无运行正文"})
 
+    # 常驻守护进程的存活变动时间线（由 collect.py 每轮对比 pid 生成）
+    survival = {"resident": False, "since": None, "events": [],
+                "last_event": None, "uptime_seconds": None, "changes": 0}
+    if ctx["kind"] == "local":
+        try:
+            survival = state_history.survival_for(task_id)
+        except Exception:
+            pass
+
     return {"ok": True, "kind": ctx["kind"], "task_id": task_id,
-            "summary": summary, "sources": sources}
+            "summary": summary, "sources": sources, "survival": survival}
 
 
 # ────────────────────────── 第二级：详细日志 ──────────────────────────

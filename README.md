@@ -7,6 +7,11 @@
 > **只读、只在本机、不联网。** 不启停任何任务，不改任何业务脚本，不读任何凭证。
 > 数据全部来自你自己的电脑，仓库里不带任何数据。
 
+**2026-11-09 更新**：看板新增亮色 / 暗色 / 跟随系统三档主题（右上角切换，选择记在本机浏览器）；
+详情抽屉新增「存活变动」时间线，用来观察 `KeepAlive` 常驻守护进程中途有没有掉过 —— 这类进程
+从不退出，`launchd` 的 `runs` 和 `last exit code` 永远没有信息量，所以改为在每轮采集时对比 pid，
+只在变化时记一条事件（基线 / 启动 / 停止 / 重启），保留 30 天、最多 2000 条。
+
 ---
 
 ## 它解决什么问题
@@ -84,6 +89,7 @@ mac-task-workbench/
 ├── system_stats.py       # CPU / 内存 / 磁盘 / 网络，标准库 + 系统命令
 ├── build_runs.py         # 汇总运行记录，判 MISSED / STALE
 ├── collect.py            # 常驻采集器：扫一轮 + 写心跳（launchd 每 5 分钟调）
+├── state_history.py      # 常驻任务的存活变动观测（只在 pid 变化时记事件）
 ├── logview.py            # 日志白名单读取 + 脱敏 + 截断
 ├── run_task.py           # 可选：包装器，给你的脚本套一层自动记日志
 ├── runlog.py             # 运行记录写入（追加式 jsonl）
@@ -102,6 +108,8 @@ data/
 ├── runs.js               # 运行记录汇总
 ├── runs/*.jsonl          # 包装器写入的日志
 ├── state.json/.js        # 采集器心跳
+├── state-snapshot.json   # 上一轮常驻任务的 pid / state 快照
+├── state-history.jsonl   # 存活变动事件（追加写）
 └── automations.js        # WorkBuddy 任务快照（降级用）
 ```
 
