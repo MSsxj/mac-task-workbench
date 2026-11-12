@@ -27,7 +27,9 @@
 import datetime
 import json
 import os
+import hashlib
 import re
+import time
 
 import state_history
 
@@ -55,6 +57,7 @@ _SECRET = re.compile(
     re.I)
 _BEARER = re.compile(r"(Bearer\s+)[A-Za-z0-9\-._~+/]+=*", re.I)
 _LONGKEY = re.compile(r"\b[A-Za-z0-9_\-]{32,}\b")
+_HOME_USER = os.path.basename(os.path.expanduser("~"))
 
 
 def sanitize_line(s):
@@ -77,6 +80,9 @@ def sanitize_line(s):
 
     out = _IPV4.sub(_ip, out)
     out = _LONGNUM.sub("<NUM>", out)
+    # 厂商日志正文常带本机登录名（如 strOsLogon = xxx），一并打码
+    if _HOME_USER and len(_HOME_USER) >= 3:
+        out = re.sub(re.escape(_HOME_USER), "<用户>", out, flags=re.I)
     if len(out) > MAX_LINE_CHARS:
         out = out[:MAX_LINE_CHARS] + "…(截断)"
     return out
@@ -133,6 +139,155 @@ def is_allowed(path):
             if os.path.isfile(rp):
                 return True, "allow-dir"
     return False, None
+
+
+# ────────────────── 本机授权目录：按任务发现日志文件 ──────────────────
+# 目的：让每个本机任务能看到「自己那摊程序写下的日志」，而不是只剩两项
+# 「不可用」。匹配词全部由任务自身的 label / 可执行文件路径 / 归属推导，
+# 不硬编码任何厂商名；换一台机器只要改 logs_allow.json 的 dirs 即可。
+
+_EXT_TTL = 20                  # 目录扫描结果缓存秒数，避免每次点击都遍历
+_EXT_LIMIT = 120               # 单个任务最多列出多少个日志文件
+_EXT_CACHE = {}
+_EXT_STOP = {
+    "com", "plist", "app", "exe", "dvc", "agent", "service", "control",
+    "daemon", "deamon", "library", "application", "support", "contents",
+    "macos", "resources", "bin", "opt", "users", "log", "logs", "root",
+    "instbase", "other", "system", "tmp", "launchagents", "launchdaemons",
+    "待确认", "其他", "本机", "任务", "归属",
+}
+
+
+def _ext_dirs():
+    """返回授权目录的真实路径列表，只取 logs_allow.json 的 dirs。"""
+    out = []
+    for raw in _load_allow()["dirs"]:
+        try:
+            rp = os.path.realpath(os.path.expanduser(str(raw)))
+        except (OSError, ValueError):
+            continue
+        if os.path.isdir(rp):
+            out.append(rp)
+    return out
+
+
+def _clean_bytes(data):
+    """部分厂商用预分配环形文件，尾部是 NUL 填充，去掉后再切行。"""
+    return data.decode("utf-8", errors="replace").replace("\x00", "")
+
+
+# 可读性检查推迟到 read_source：扫描期逐个 open 厂商日志会被管控软件
+# 实时拦截，实测 81 个文件耗时 38 秒，页面完全不能接受。
+
+
+def _task_keys(ctx):
+    """从任务自身字段推导匹配关键词，全部小写。"""
+    loc = (ctx or {}).get("local") or {}
+    raw = " ".join(str(loc.get(k) or "") for k in
+                   ("label", "program", "vendor", "log_path", "file", "path"))
+    parts = re.split(r"[^a-z0-9\u4e00-\u9fff]+", raw.lower())
+    home_user = os.path.basename(os.path.expanduser("~")).lower()
+    # 路径里的用户名、年份这类词会误命中同目录日志（例如把 gui-<用户>_0.log
+    # 判给自建任务），必须排除；匹配只用能标识程序本身的词。
+    return {p for p in parts if len(p) >= 3 and p not in _EXT_STOP
+            and p != home_user and not p.isdigit()}
+
+
+def _human_size(n):
+    if n < 1024:
+        return "%d B" % n
+    if n < 1024 * 1024:
+        return "%.0f KB" % (n / 1024.0)
+    return "%.1f MB" % (n / 1024.0 / 1024.0)
+
+
+_AUTH_TTL = 60                 # 授权目录全量扫描的共享缓存秒数
+_AUTH_CACHE = None            # (ts, [文件信息...])，所有任务共用一份
+
+
+def _authorized_files():
+    """全局扫一次授权目录，缓存给全部任务复用（只 stat，不打开文件）。
+
+    规则与 is_allowed 的「授权目录」分支一致：真实路径在目录内 + 后缀
+    为 .log/.txt/.jsonl。扫描期不读文件内容，避免管控软件 hook 拖慢首屏。
+    """
+    global _AUTH_CACHE
+    now = time.time()
+    if _AUTH_CACHE and now - _AUTH_CACHE[0] < _AUTH_TTL:
+        return _AUTH_CACHE[1]
+    home_user = os.path.basename(os.path.expanduser("~"))
+    dirs = _ext_dirs()
+    out = []
+    for root in dirs:
+        root_name = os.path.basename(root)
+        for dp, dns, fns in os.walk(root):
+            if dp[len(root):].count(os.sep) > 2:
+                dns[:] = []
+                continue
+            dns[:] = [x for x in dns if not x.startswith(".")]
+            for fn in fns:
+                if not fn.endswith((".log", ".txt", ".jsonl")):
+                    continue
+                p = os.path.join(dp, fn)
+                try:
+                    rp = os.path.realpath(p)
+                    st = os.stat(rp)
+                except OSError:
+                    continue
+                if st.st_size < 512:
+                    continue
+                if not any(rp.startswith(d + os.sep) for d in dirs):
+                    continue
+                rel = os.path.relpath(rp, root)
+                out.append({
+                    "sid": "ext-" + hashlib.md5(
+                        (root_name + "/" + rel).encode("utf-8")).hexdigest()[:12],
+                    "path": rp, "rel": root_name + "/" + rel,
+                    "name": fn.replace(home_user, "<用户>") if home_user else fn,
+                    "size": st.st_size, "mtime": st.st_mtime,
+                    "size_txt": _human_size(st.st_size),
+                    "mtime_txt": time.strftime("%m-%d %H:%M", time.localtime(st.st_mtime)),
+                })
+    _AUTH_CACHE = (time.time(), out)   # 用结束时间，别把扫描耗时算进 TTL
+    return out
+
+
+def discover_logs_for(task_id):
+    """按任务关键词挑出相关日志，并附同目录其他日志（折叠展示）。
+
+    一个相关文件都没有时返回空表，如实显示「未找到」，不张冠李戴。
+    返回稳定 source_id，前端始终不接触文件路径。
+    """
+    now = time.time()
+    hit = _EXT_CACHE.get(task_id)
+    if hit and now - hit[0] < _EXT_TTL:
+        return hit[1]
+
+    keys = _task_keys(_task_ctx(task_id))
+    related, others = [], []
+    for f in _authorized_files():
+        matched = [k for k in keys if k in f["rel"].lower()]
+        item = dict(f)
+        item["related"] = bool(matched)
+        item["score"] = sum(10 for k in matched if k in f["name"].lower()) + len(matched)
+        (related if matched else others).append(item)
+
+    if not related:                       # 无相关文件时不展示同目录杂项
+        _EXT_CACHE[task_id] = (now, [])
+        return []
+    related.sort(key=lambda x: (-x["score"], -x["mtime"], x["name"]))
+    others.sort(key=lambda x: (-x["mtime"], x["name"]))
+    out = (related + others)[:_EXT_LIMIT]
+    _EXT_CACHE[task_id] = (now, out)
+    return out
+
+
+def _ext_lookup(task_id, sid):
+    """read_source 用：确认 sid 确实属于这个任务可见集合。"""
+    for e in discover_logs_for(task_id):
+        if e["sid"] == sid:
+            return e
+    return None
 
 
 # ────────────────────────── 数据源读取 ──────────────────────────
@@ -328,6 +483,27 @@ def summary_for(task_id):
                         "available": True,
                         "reason": "平台只提供结果码与起止时间，无运行正文"})
 
+    # 5) 本机授权目录里与该任务相关的日志文件（v2.3.0）
+    #    命中关键词的排在前面；同目录其余日志折叠展示，仍受白名单与脱敏约束。
+    if ctx["kind"] == "local":
+        try:
+            ext = discover_logs_for(task_id)
+        except Exception:
+            ext = []
+        for e in ext:
+            sources.append({
+                "id": e["sid"], "label": "本机日志 · " + e["name"],
+                "group": "ext", "related": e["related"],
+                "meta": e["size_txt"] + " ｜ 最后写入 " + e["mtime_txt"],
+                "available": True, "reason": None,
+            })
+        if not ext:
+            sources.append({
+                "id": "ext-none", "label": "本机授权目录中的相关日志",
+                "group": "ext", "related": False, "available": False,
+                "reason": "未找到与该任务相关的日志文件；该程序可能根本没写文件日志",
+            })
+
     # 常驻守护进程的存活变动时间线（由 collect.py 每轮对比 pid 生成）
     survival = {"resident": False, "since": None, "events": [],
                 "last_event": None, "uptime_seconds": None, "changes": 0}
@@ -377,8 +553,9 @@ def _tail_file(path, max_lines=MAX_LINES, max_bytes=MAX_BYTES):
                 cut = False
     except OSError as e:
         return None, "读取失败：%s" % e, False
-    txt = data.decode("utf-8", errors="replace")
-    lines = txt.splitlines()
+    # 部分厂商用预分配环形文件，尾部是 NUL；不清掉会读出满屏空白
+    txt = _clean_bytes(data)
+    lines = [x for x in txt.splitlines() if x.strip()]
     truncated = cut
     if len(lines) > max_lines:
         lines = lines[-max_lines:]
@@ -440,6 +617,26 @@ def read_source(task_id, source_id):
             lines.append("（该任务暂无平台运行记录）")
         return {"ok": True, "lines": [sanitize_line(x) for x in lines],
                 "truncated": False}
+
+    # 本机授权目录日志（v2.3.0）：sid 必须属于该任务可见集合
+    if source_id.startswith("ext-"):
+        e = _ext_lookup(task_id, source_id)
+        if not e:
+            return {"ok": False, "error": "未授权或已失效的日志来源"}
+        ok, _ = is_allowed(e["path"])
+        if not ok:
+            return {"ok": False, "error": "不在白名单内"}
+        lines, err, trunc = _tail_file(e["path"])
+        if err:
+            return {"ok": False, "error": err}
+        if not lines:
+            lines = ["（该文件尾部没有可读正文，可能是预分配的环形日志；"
+                     "程序写入后即可查看）"]
+        head = ["来源：本机授权日志 · " + e["name"],
+                "最后写入：" + e["mtime_txt"] + " ｜ 文件 " + e["size_txt"],
+                "已脱敏：凭据、IP、邮箱、长数字串、本机用户名；仅显示文件尾部", ""]
+        return {"ok": True, "lines": head + [sanitize_line(x) for x in lines],
+                "truncated": trunc}
 
     # 固定/授权文件来源
     files, _ = _allowed_paths()

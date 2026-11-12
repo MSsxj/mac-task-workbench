@@ -262,6 +262,15 @@ tbody tr:active{background:var(--hov1a)}
 .srcrow:last-child{border-bottom:none}
 .srcrow .lbl{font-size:12.5px}
 .srcrow .why{font-size:11px;color:var(--ink3)}
+.srcgroup{font-size:10.5px;color:var(--ink2);font-weight:500;letter-spacing:.08em;margin:14px 0 2px;
+  padding-top:9px;border-top:1px dashed var(--line)}
+.srcmore{margin-top:10px;border-top:1px solid var(--line2);padding-top:4px}
+.srcmore>summary{cursor:pointer;font-size:11.5px;color:var(--ink2);padding:7px 0;
+  list-style:none;user-select:none}
+.srcmore>summary::-webkit-details-marker{display:none}
+.srcmore>summary::before{content:"▸ ";color:var(--ink3)}
+.srcmore[open]>summary::before{content:"▾ "}
+.srcmore>summary:focus-visible{outline:2px solid var(--ink3);outline-offset:2px}
 .hint{font-size:11px;color:var(--ink3);line-height:1.65;margin-top:8px}
 .foot{margin-top:30px;font-size:11px;color:var(--ink3);line-height:1.75;
   border-top:1px solid var(--line);padding-top:14px}
@@ -988,15 +997,41 @@ tbody tr:active{background:var(--hov1a)}
     }
 
     h += '<h4>日志来源</h4>';
+    var okFixed=[], noFixed=[], rel=[], oth=[], none=null;
     (d.sources||[]).forEach(function(src){
-      h += '<div class="srcrow">'+
-           '<button type="button" data-src="'+esc(src.id)+'"'+(src.available?'':' disabled')+'>'+
-             (src.available? '查看详细日志' : '不可用')+'</button>'+
-           '<div><div class="lbl">'+esc(src.label)+'</div>'+
-           (src.reason? '<div class="why">'+esc(src.reason)+'</div>':'')+'</div>'+
-           '</div>';
+      if(src.group!=='ext'){ (src.available? okFixed : noFixed).push(src); return; }
+      if(src.id==='ext-none'){ none=src; return; }
+      (src.related? rel : oth).push(src);
     });
-    h += '<div class="hint">日志只从白名单内的文件读取，已脱敏（凭据、IP、邮箱、长数字串），最多 300 行。</div>';
+    var rowHtml=function(src){
+      return '<div class="srcrow">'+
+             '<button type="button" data-src="'+esc(src.id)+'"'+(src.available?'':' disabled')+'>'+
+               (src.available? '查看详细日志' : '不可用')+'</button>'+
+             '<div><div class="lbl">'+esc(src.label)+'</div>'+
+             (src.meta? '<div class="why">'+esc(src.meta)+'</div>':'')+
+             (src.reason? '<div class="why">'+esc(src.reason)+'</div>':'')+
+             '</div></div>';
+    };
+    okFixed.forEach(function(src){ h += rowHtml(src); });
+    if(rel.length){
+      h += '<div class="srcgroup">本机相关日志 · '+rel.length+' 个</div>';
+      rel.forEach(function(src){ h += rowHtml(src); });
+    }
+    if(noFixed.length || none){
+      h += '<details class="srcmore"><summary>其余无内容的来源（'+
+           (noFixed.length + (none?1:0))+' 项）</summary>';
+      noFixed.forEach(function(src){ h += rowHtml(src); });
+      if(none) h += rowHtml(none);
+      h += '</details>';
+    }
+    if(oth.length){
+      h += '<details class="srcmore"><summary>同目录其他日志（'+oth.length+
+           ' 个，未必属于本任务）</summary>';
+      oth.forEach(function(src){ h += rowHtml(src); });
+      h += '</details>';
+    }
+    h += '<div class="hint">日志只从白名单文件/目录读取，按任务名与程序路径自动匹配相关文件。'+
+         '已脱敏（凭据、IP、邮箱、长数字串、本机用户名），单文件最多 300 行 / 96 KB。</div>';
 
     h += '<h4>详细日志</h4>';
     h += '<div class="logbox" id="logbox"></div>';
