@@ -32,6 +32,7 @@ import re
 import time
 
 import state_history
+import task_meta
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
@@ -513,8 +514,15 @@ def summary_for(task_id):
         except Exception:
             pass
 
+    # 人工核对的任务档案：一句话说明 + 结果去哪看（未登记则返回 registered=False）
+    try:
+        meta = task_meta.for_task(task_id)
+    except Exception:
+        meta = {"registered": False}
+
     return {"ok": True, "kind": ctx["kind"], "task_id": task_id,
-            "summary": summary, "sources": sources, "survival": survival}
+            "summary": summary, "sources": sources, "survival": survival,
+            "meta": meta}
 
 
 # ────────────────────────── 第二级：详细日志 ──────────────────────────

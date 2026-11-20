@@ -2,6 +2,7 @@
 data/
 logs_allow.json
 task_profiles.json
+task_meta.json
 
 # ── 备份 ──
 backups/

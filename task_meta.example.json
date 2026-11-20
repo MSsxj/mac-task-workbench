@@ -1,0 +1,32 @@
+{
+  "_说明": "复制为 task_meta.json 后按自己机器的情况填写。这里只记「任务是什么」和「结果去哪看」，不要写 SQL 正文、账号、密钥或任何凭证。task_meta.json 已被 .gitignore 排除，不会上传。",
+  "_字段": "key=任务 id（WorkBuddy 任务用 UUID，Mac 本地任务用 plist label）；desc=一句话说明；source=数据来源概述；outputs[]={kind: feishu|excel|file|web|other, label=结果位置中文名, path=本地完整绝对路径, url=线上地址}；updated=核对日期",
+  "tasks": {
+    "把这里换成任务 id": {
+      "desc": "一句话说明这个任务做什么，例如：每周一统计上周订单数，把汇总发到团队群。",
+      "source": "数据来源概述，例如：本机业务数据库（只读取数）",
+      "outputs": [
+        {"kind": "feishu", "label": "团队群（示例）"},
+        {
+          "kind": "excel",
+          "label": "本地 Excel · 汇总表 →「明细」sheet",
+          "path": "/Users/<你的用户名>/Desktop/汇总表.xlsx"
+        },
+        {"kind": "web", "label": "结果站点（示例）", "url": "https://example.com/"}
+      ],
+      "updated": "填写核对日期，例如 2026-11-20"
+    },
+    "com.example.my-agent": {
+      "desc": "再举一个本机 plist 任务的例子：常驻采集某程序的运行数据。",
+      "source": "本机程序输出",
+      "outputs": [
+        {
+          "kind": "file",
+          "label": "本地数据文件 · data.js",
+          "path": "/Users/<你的用户名>/myproject/data.js"
+        }
+      ],
+      "updated": "填写核对日期"
+    }
+  }
+}

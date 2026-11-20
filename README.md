@@ -96,6 +96,7 @@ mac-task-workbench/
 ├── build_runs.py         # 汇总运行记录，判 MISSED / STALE
 ├── collect.py            # 常驻采集器：扫一轮 + 写心跳（launchd 每 5 分钟调）
 ├── state_history.py      # 常驻任务的存活变动观测（只在 pid 变化时记事件）
+├── task_meta.py          # 只读任务档案：一句话说明 + 结果去哪看
 ├── logview.py            # 日志白名单读取 + 脱敏 + 截断
 ├── run_task.py           # 可选：包装器，给你的脚本套一层自动记日志
 ├── runlog.py             # 运行记录写入（追加式 jsonl）
@@ -127,6 +128,7 @@ data/
 |---|---|---|
 | `logs_allow.example.json` | 复制为 `logs_allow.json`，列出你允许网页读取的日志路径 | 只能读本项目自己的日志 |
 | `task_profiles.example.json` | 复制为 `task_profiles.json`，定义怎么从脚本输出里识别步骤和行数 | 只按 `[1/3]` 这类通用标记识别步骤 |
+| `task_meta.example.json` | 复制为 `task_meta.json`，给每个任务写一句话说明和结果位置 | 抽屉不显示「这个任务是什么」小节 |
 
 ### 把本机已有的日志接进来
 
@@ -144,6 +146,23 @@ data/
 - 程序自己不写日志文件的任务（比如只配了 `KeepAlive` 的常驻守护进程），会显示「未找到与该任务相关的日志文件」。**看板只读取，不会替任务生成日志**；想让它有日志，需要任务自己配置输出路径，那属于改动任务，不在本项目的只读边界内。
 - 前端永远只传 `task_id + source_id`，真实路径由服务端解析；伪造或跨任务的 `source_id` 会被拒绝。
 - 删掉某个目录即可一键撤回授权。
+
+### 给任务写一句话说明和结果位置
+
+任务一多，容易忘「这条到底是干嘛的、跑完去哪看结果」。`task_meta.json` 就是给自己的备忘录：点开任务抽屉，最上面会显示一句话说明、数据来源概述，以及结果在哪（飞书群 / 多维表、本地 Excel 完整路径、线上站点）。本地路径带「复制路径」按钮，方便直接粘到访达或终端。
+
+```bash
+cp task_meta.example.json task_meta.json
+# 然后按这台机器真实的任务 id 改写
+```
+
+- **key 用任务 id**：WorkBuddy 任务用 UUID，Mac 本地任务用 plist 的 `label`；任务名不是 key。
+- `kind` 只决定标签颜色：`feishu` / `excel` / `file` / `web` / `other`。
+- `path` 写完整绝对路径（服务端不做变量展开）；`url` 只放行 http(s)，`javascript:` 之类会被丢掉。
+- 这份文件是**人工核对**的：本项目不读 WorkBuddy 的 `prompt`，不解析 SQL，也不存凭证。任务内容改了，档案要手动更新，页面不会自动跟着变。
+- 没登记的任务不显示这一节，运行摘要、历史记录、日志照常。
+- 字段有长度与条数上限；JSON 写坏了只会降级成「未登记」，不会让抽屉打不开。
+- 编辑后最多等 10 秒生效。`task_meta.json` 已被 `.gitignore` 排除，仓库里只放 example。
 
 ---
 
@@ -180,6 +199,7 @@ python3 run_task.py \
 5. **日志脱敏** —— 密码 / token / Bearer / 连接串 / IP / 邮箱 / 长数字串 / 本机登录名一并打码；单文件最多读尾部 96 KB、返回 300 行，单行超 400 字截断
 6. **不启停任务** —— 没有增删改任何任务的接口
 7. **不外发** —— 没有出网请求，不上传任何数据
+8. **任务档案只在本机** —— `task_meta.json` 是人工维护的本地备忘录，服务端只读它、不读 `prompt`、不解析 SQL；字段长度受限，链接只放行 http(s)
 
 ---
 
@@ -208,6 +228,9 @@ WORKBENCH_WATCH_DIR=~/myproject python3 验收检查.py
 
 **「WorkBuddy 任务」一栏是空的**
 这台机器没装 WorkBuddy，或本地库路径不同。该部分是可选的，不影响其他功能。
+
+**抽屉里没有「这个任务是什么」这一节**
+说明这个任务还没登记：把 `task_meta.example.json` 复制成 `task_meta.json`，用任务 id（不是任务名）作为 key 填一条。没登记是正常状态，不影响日志和历史记录。
 
 **端口 8765 被占用**
 `python3 serve.py --port 8766`，地址相应改成 `http://127.0.0.1:8766`。

@@ -272,6 +272,29 @@ tbody tr:active{background:var(--hov1a)}
 .srcmore[open]>summary::before{content:"▾ "}
 .srcmore>summary:focus-visible{outline:2px solid var(--ink3);outline-offset:2px}
 .hint{font-size:11px;color:var(--ink3);line-height:1.65;margin-top:8px}
+/* ── 任务档案：一句话说明 + 结果去哪看（本机私有配置驱动）── */
+.metabox{border:1px solid var(--line);background:var(--card);border-radius:var(--radius);
+  padding:12px 14px;margin:0 0 2px}
+.metadesc{font-size:13.5px;line-height:1.75;color:var(--ink)}
+.metagrid{display:grid;grid-template-columns:64px 1fr;gap:9px 12px;
+  font-size:12.5px;margin-top:11px}
+.metagrid>.mk{color:var(--ink3)}
+.metaouts{display:flex;flex-direction:column;gap:9px;min-width:0}
+.metaout{min-width:0}
+.metaol{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.otag{flex:none;font-size:10.5px;line-height:1;padding:3px 6px;border-radius:5px;
+  border:1px solid var(--line);background:var(--graybg);color:var(--ink2)}
+.otag.t-feishu,.otag.t-web{background:var(--infobg);color:var(--info);
+  border-color:var(--linkline)}
+.otag.t-excel{background:var(--okbg);color:var(--ok)}
+.olbl{font-size:12.5px;color:var(--ink)}
+.opath{display:block;font-family:var(--mono);font-size:11px;line-height:1.55;
+  color:var(--ink2);background:var(--logbg);border:1px solid var(--line2);
+  border-radius:6px;padding:5px 8px;margin-top:5px;word-break:break-all;user-select:all}
+.metacopy{padding:3px 8px;font-size:11px;margin-top:5px}
+.metaurl{color:var(--info);font-size:11.5px;text-underline-offset:2px}
+.metaupdated{font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6}
+.metanone{font-size:12px;color:var(--ink3)}
 .foot{margin-top:30px;font-size:11px;color:var(--ink3);line-height:1.75;
   border-top:1px solid var(--line);padding-top:14px}
 
@@ -902,6 +925,7 @@ tbody tr:active{background:var(--hov1a)}
     return (RUN_ST[st]||[,'未知'])[1];
   }
 
+  var META_KIND = {feishu:'飞书', excel:'Excel', file:'本地文件', web:'线上', other:'其他'};
   function renderDrawer(d){
     if(!d || !d.ok){
       $('dr-body').innerHTML = '<div class="notice bad">'+esc((d&&d.error)||'没有这个任务的记录')+'</div>';
@@ -909,6 +933,36 @@ tbody tr:active{background:var(--hov1a)}
     }
     var s = d.summary || {};
     var h = '';
+
+    /* 人工核对的任务档案：说明 + 结果位置；未登记的任务不占位置 */
+    var mt = d.meta || {};
+    if(mt.registered){
+      h += '<h4>这个任务是什么<span class="dim" style="font-weight:400"> · 怕忘记看这里</span></h4>';
+      h += '<div class="metabox">';
+      if(mt.desc) h += '<div class="metadesc">'+esc(mt.desc)+'</div>';
+      h += '<div class="metagrid">';
+      if(mt.source) h += '<div class="mk">数据来源</div><div>'+esc(mt.source)+'</div>';
+      h += '<div class="mk">结果在哪</div><div class="metaouts">';
+      (mt.outputs||[]).forEach(function(o){
+        var kn = o.kind || 'other';
+        h += '<div class="metaout"><div class="metaol">'+
+             '<span class="otag t-'+esc(kn)+'">'+esc(META_KIND[kn]||'其他')+'</span>'+
+             '<span class="olbl">'+esc(o.label||'')+'</span>'+
+             (o.url? '<a class="metaurl" href="'+esc(o.url)+'" target="_blank" rel="noopener noreferrer">打开 ↗</a>':'')+
+             '</div>';
+        if(o.path){
+          h += '<code class="opath">'+esc(o.path)+'</code>'+
+               '<div><button type="button" class="metacopy" data-copy="'+esc(o.path)+'">复制路径</button>'+
+               '<span class="dim metacopynote" style="font-size:11px;margin-left:7px"></span></div>';
+        }
+        h += '</div>';
+      });
+      if(!(mt.outputs||[]).length) h += '<div class="metanone">结果位置还没登记</div>';
+      h += '</div></div>';
+      if(mt.updated) h += '<div class="metaupdated">档案核对：'+esc(mt.updated)+
+                          ' ｜ 只记说明与结果位置，不记 SQL、不记凭证</div>';
+      h += '</div>';
+    }
 
     h += '<h4>运行摘要</h4>';
     h += '<div class="kv">';
@@ -1048,6 +1102,18 @@ tbody tr:active{background:var(--hov1a)}
       });
     });
     $('btn-copy').addEventListener('click', copyLog);
+
+    // 结果位置的完整路径：一键复制，方便直接粘到访达 / 终端
+    box.querySelectorAll('button[data-copy]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var txt = b.getAttribute('data-copy') || '';
+        var note = b.parentNode.querySelector('.metacopynote');
+        var done = function(){ if(note) note.textContent = '已复制'; };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
+        } else { fallbackCopy(txt, done); }
+      });
+    });
 
     // 自动展开第一个可用来源，省一次点击
     var first = (d.sources||[]).filter(function(x){ return x.available; })[0];
